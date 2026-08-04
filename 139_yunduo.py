@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# cron: 0 9 * * *
+# new Env('139云盘云朵任务')
 """
 139云盘(中国移动云盘) 云朵任务自动执行脚本
 适配青龙面板,纯 Python 标准库实现,无需 pip 安装任何依赖。
 
 功能:
   - 全自动认证链: querySpecToken -> ssoToken -> tyrzLogin -> jwtToken
-  - AI豆(原云朵)余额统计(getCloudNum),与历史对比算出"本次获取"
+  - AI豆(原云朵)余额统计(getCloudNum)
   - 每日签到(startSignIn,+3豆,基于 infoV3 防重复)
   - 拉取带豆数的云朵任务列表(taskListV3)
   - 自动完成纯接口可完成的任务:
       * 319 小云互动礼(循环点击直至完成,送云朵)
       * 118 调查问卷(单次点击即完成)
-      * 605/606/431 等点击即完成的任务(可选 YDYP_TRY_ALL)
+      * 605/606/431 等点击即完成的任务(YDYP_TRY_ALL)
       * 106 手动上传一个文件(上传后 FINISH,完成后可自动删除)
   - 运行结束发送通知总结(青龙内置通知 / PushPlus / Server酱)
 
@@ -20,11 +22,10 @@
   YDYP_ACCOUNTS          多账号,每行一个,格式: 手机号|Basic <token> (优先)
   YDYP_PHONE             单账号手机号 (与 YDYP_AUTH 配合)
   YDYP_AUTH              单账号 Authorization 值(Basic 开头,可省略 Basic 前缀)
-  YDYP_TRY_ALL           是否尝试所有未完成任务,默认 false
+  YDYP_TRY_ALL           是否尝试所有未完成任务,默认 true
   YDYP_INTERACT_LIMIT    小云互动礼最大点击次数,默认 30
   YDYP_UPLOAD            是否执行上传任务(106),默认 true
   YDYP_DELETE_AFTER      上传完成后是否删除文件,默认 true
-  YDYP_STATE_FILE        余额历史记录文件路径(用于统计本次获取),默认脚本目录下 139_yunduo_state.json
   PUSHPLUS_TOKEN         PushPlus 推送 token(可选)
   SENDKEY                Server酱 SendKey(可选)
 """
@@ -424,32 +425,6 @@ def trash_files(basic, file_ids):
 
 
 # ---------------------------------------------------------------------------
-# 余额历史记录(统计本次获取)
-# ---------------------------------------------------------------------------
-def _state_path():
-    p = os.environ.get("YDYP_STATE_FILE", "").strip()
-    if p:
-        return p
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "139_yunduo_state.json")
-
-
-def _load_state():
-    try:
-        with open(_state_path(), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:  # noqa: BLE001
-        return {}
-
-
-def _save_state(state):
-    try:
-        with open(_state_path(), "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-    except Exception:  # noqa: BLE001
-        pass
-
-
-# ---------------------------------------------------------------------------
 # 单账号执行
 # ---------------------------------------------------------------------------
 def run_account(phone, auth_token, try_all=False, interact_limit=30,
@@ -460,8 +435,6 @@ def run_account(phone, auth_token, try_all=False, interact_limit=30,
     """
     lines = []
     phone_masked = phone[:3] + "****" + phone[-4:] if len(phone) >= 7 else phone
-    state = _load_state()
-    prev_balance = state.get(phone, {}).get("balance")
 
     # ---- 认证 ----
     basic = _basic(phone, auth_token)
@@ -609,18 +582,9 @@ def run_account(phone, auth_token, try_all=False, interact_limit=30,
         total = len(tasks)
         lines.append("📊 %s 任务汇总: 完成 %d/%d" % (phone_masked, finished, total))
 
-    # ---- 余额统计(本次获取) ----
+    # ---- 余额统计 ----
     if balance is not None:
-        if prev_balance is None:
-            lines.append("📈 %s 首次记录余额 %s(历史对比需运行两次)" % (phone_masked, balance))
-            rate = None
-        else:
-            delta = balance - prev_balance
-            lines.append("📈 %s 较上次 +%d AI豆(%s -> %s)"
-                         % (phone_masked, delta, prev_balance, balance))
-        state.setdefault(phone, {})["balance"] = balance
-        state[phone]["last_run"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        _save_state(state)
+        lines.append("💰 %s 当前AI豆余额: %s" % (phone_masked, balance))
 
     return True, lines
 
@@ -749,7 +713,8 @@ def main():
         print("  单账号: YDYP_PHONE + YDYP_AUTH")
         sys.exit(1)
 
-    try_all = os.environ.get("YDYP_TRY_ALL", "").strip().lower() in ("1", "true", "yes", "on")
+    try_all = os.environ.get("YDYP_TRY_ALL", "").strip().lower()
+    try_all = try_all not in ("", "0", "false", "no", "off")  # 默认开启
     interact_limit = int(os.environ.get("YDYP_INTERACT_LIMIT", "30"))
     do_upload = os.environ.get("YDYP_UPLOAD", "").strip().lower() not in ("0", "false", "no", "off")
     delete_after = os.environ.get("YDYP_DELETE_AFTER", "").strip().lower() not in ("0", "false", "no", "off")
