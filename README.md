@@ -58,7 +58,7 @@
 1. 先把本仓库推送到你的 GitHub / Gitee(或任意青龙能访问的 git 仓库),然后在青龙面板 **订阅管理** 中添加:
 
    ```
-   ql repo https://github.com/<你的用户名>/personal-scripts.git "139_yunduo.py" "" ""
+   ql repo https://github.com/deeplee/personal-scripts.git "139_yunduo.py" "" ""
    ```
 
    - 第 1 个引号参数 `139_yunduo.py` = 只拉取该脚本(白名单正则)
