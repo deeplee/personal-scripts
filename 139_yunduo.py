@@ -16,6 +16,7 @@
       * 118 调查问卷(单次点击即完成)
       * 605/606/431 等点击即完成的任务(YDYP_TRY_ALL)
       * 106 手动上传一个文件(上传后 FINISH,完成后可自动删除)
+  - 只读展示当前 AI豆余额可兑换的奖品清单(exchangeList,不执行兑换)
   - 运行结束发送通知总结(青龙内置通知 / PushPlus / Server酱)
 
 环境变量:
@@ -60,6 +61,13 @@ H5_GET_CLOUD_NUM = H5_BASE + "/signin/page/getCloudNum"
 H5_INFO_V3 = H5_BASE + "/signin/page/infoV3"
 H5_START_SIGN_IN = H5_BASE + "/signin/page/startSignIn"
 H5_TASK_LIST_V3 = H5_BASE + "/signin/task/taskListV3"
+H5_EXCHANGE_LIST = H5_BASE + "/signin/page/exchangeList"
+
+# 兑换奖品分类映射(exchangeList result 的 key)
+EXCHANGE_CATEGORIES = {
+    "0": "云盘", "1": "视频", "2": "音乐", "5": "外卖", "7": "快递",
+    "8": "转存券", "9": "工具", "11": "美食", "15": "流量",
+}
 
 # 新平台 personal 上传/删除域
 PERSONAL_HOST = "https://personal-kd-njs.yun.139.com/hcy"
@@ -263,6 +271,16 @@ def get_sign_info(jwt):
         return None, "infoV3失败: %s %s" % (d.get("code"), d.get("msg", ""))
     result = d.get("result") or {}
     return result, None
+
+
+def get_exchange_list(jwt):
+    """兑换奖品列表(exchangeList,只读)。result 为 {分类ID: 奖品数组}"""
+    d, err = h5_get(jwt, H5_EXCHANGE_LIST)
+    if err:
+        return None, err
+    if d.get("code") != 0:
+        return None, "exchangeList失败: %s %s" % (d.get("code"), d.get("msg", ""))
+    return d.get("result") or {}, None
 
 
 def is_signed_today(result):
@@ -585,6 +603,36 @@ def run_account(phone, auth_token, try_all=False, interact_limit=30,
     # ---- 余额统计 ----
     if balance is not None:
         lines.append("💰 %s 当前AI豆余额: %s" % (phone_masked, balance))
+
+    # ---- 可兑换清单 ----
+    if balance is not None:
+        ex, err = get_exchange_list(jwt)
+        if err:
+            lines.append("⚠️ %s 可兑换清单获取失败: %s" % (phone_masked, err))
+        else:
+            afford = []
+            for cat_id, prizes in ex.items():
+                if not isinstance(prizes, list):
+                    continue
+                cat = EXCHANGE_CATEGORIES.get(str(cat_id), "分类%s" % cat_id)
+                for p in prizes:
+                    price = p.get("POrder")
+                    try:
+                        price = int(price)
+                    except (TypeError, ValueError):
+                        continue
+                    online = p.get("onLine", 1)
+                    if 0 < price <= balance and online not in (0, "0", False):
+                        afford.append((price, p.get("prizeName", "?"), cat,
+                                       p.get("dailyRemainderCount", "?")))
+            if afford:
+                afford.sort(key=lambda x: x[0])
+                lines.append("🛒 %s 可兑换清单(余额%d, %d项):"
+                             % (phone_masked, balance, len(afford)))
+                for price, name, cat, remain in afford:
+                    lines.append("   · %s %s豆[%s] 今日剩%s" % (name, price, cat, remain))
+            else:
+                lines.append("🛒 %s 暂无余额可兑换的奖品" % phone_masked)
 
     return True, lines
 
