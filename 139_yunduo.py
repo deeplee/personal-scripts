@@ -19,7 +19,7 @@
   - 只读展示当前 AI豆余额可兑换的奖品清单(exchangeList,不执行兑换)
   - 运行结束发送通知总结(青龙内置通知 / PushPlus / Server酱)
 
-环境变量:
+环境变量(在青龙面板配置):
   YDYP_ACCOUNTS          多账号,每行一个,格式: 手机号|Basic <token> (优先)
   YDYP_PHONE             单账号手机号 (与 YDYP_AUTH 配合)
   YDYP_AUTH              单账号 Authorization 值(Basic 开头,可省略 Basic 前缀)
@@ -29,6 +29,13 @@
   YDYP_DELETE_AFTER      上传完成后是否删除文件,默认 true
   PUSHPLUS_TOKEN         PushPlus 推送 token(可选)
   SENDKEY                Server酱 SendKey(可选)
+
+如何获取 token(Authorization):
+  1. 浏览器登录 https://yun.139.com (网页版)
+  2. 打开开发者工具(F12) → 网络(Network)
+  3. 刷新页面,任选一个 api.yun.139.com 或 yun.139.com 的请求
+  4. 查看请求头 Authorization 字段(形如 Basic xxxxxx)
+  5. 连同手机号填入青龙面板环境变量
 """
 import base64
 import hashlib
